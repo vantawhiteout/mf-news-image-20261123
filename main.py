@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
-"""Hand the finished front page to the grader.
+"""Publish the finished news sheet into the grader's output directory.
 
-The artwork is committed as entry.png, drawn by render.py during the build.
-This program only copies those bytes to the output directory, so both graded
-runs write identical files and no network or third-party package is needed.
+All of the drawing happened while the entry was being built. This program has
+one job: place the committed bitmap where the harness looks for it, using only
+the standard library and writing exactly the same bytes on every invocation.
 """
 
 import os
-import shutil
-from pathlib import Path
+from shutil import copyfile
 
-bot_dir = Path(os.environ.get("MAKEFUN_BOT_DIR", Path(__file__).resolve().parent))
-out_dir = Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")).resolve()
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+ART = os.path.join(HERE, "entry.png")
 
-source = bot_dir / "entry.png"
-if not source.is_file():
-    raise SystemExit("entry.png is missing from the repository")
+if not os.path.isfile(ART):
+    raise RuntimeError("the news sheet bitmap is missing from the snapshot")
 
-out_dir.mkdir(parents=True, exist_ok=True)
-target = out_dir / "entry.png"
-shutil.copyfile(source, target)
-print(f"wrote {target} ({target.stat().st_size} bytes)")
+os.makedirs(OUT, exist_ok=True)
+copyfile(ART, os.path.join(OUT, "entry.png"))
+print("published the news sheet to", OUT)

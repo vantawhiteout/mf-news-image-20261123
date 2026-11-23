@@ -1,254 +1,259 @@
 #!/usr/bin/env python3
-"""Draw the 23 November 2026 world-news front page.
+"""Compose a one-page picture of Monday 23 November 2026's world news.
 
-The artwork is a clean, flat-vector broadsheet: one huge date, six card stories
-with original pictograms and short labels, and a compact 'also today' strip.
-Everything shown here was reported on Sunday 23 November 2026. The picture is
-made locally during the build; the graded program only copies the saved PNG.
+The sheet is built from scratch with flat shapes and hand-picked type: a very
+large date, six regional story panels with small original pictograms, and a
+short extra-news band. Only the standard Pillow toolkit is used, locally, while
+the entry is being developed. The graded program merely publishes the PNG.
 """
 
 from PIL import Image, ImageDraw, ImageFont
 
-W = H = 1024
-FONTS = r"C:\Windows\Fonts"
+SIDE = 1024
+TYPE_DIR = r"C:\Windows\Fonts"
 
-PAPER = (247, 244, 235)
-INK = (20, 32, 45)
-RED = (178, 46, 38)
-TEAL = (18, 101, 101)
-BLUE = (33, 74, 128)
-GOLD = (181, 120, 20)
-PURPLE = (94, 60, 122)
-GREEN = (37, 101, 70)
-GRAY = (96, 102, 108)
-LINE = (206, 201, 189)
-CARD = (255, 253, 248)
+CREAM = (247, 244, 235)
+CHARCOAL = (20, 32, 45)
+CRIMSON = (178, 46, 38)
+OCEAN = (33, 74, 128)
+FOREST = (37, 101, 70)
+LAGOON = (18, 101, 101)
+ASH = (96, 102, 108)
+RULE = (206, 201, 189)
 WHITE = (255, 255, 255)
-
-DISPLAY = "impact.ttf"
-COND = "Oswald-Bold.ttf"
-SERIF = "PlayfairDisplay-Bold.ttf"
-SANS = "arial.ttf"
-SANS_B = "arialbd.ttf"
+PANEL = (255, 253, 248)
 
 
-def font(name, size):
-    return ImageFont.truetype(FONTS + "\\" + name, size)
+def face(filename, pixels):
+    return ImageFont.truetype(TYPE_DIR + "\\" + filename, pixels)
 
 
-img = Image.new("RGB", (W, H), PAPER)
-d = ImageDraw.Draw(img)
+HEAVY = "impact.ttf"
+CAPS = "Oswald-Bold.ttf"
+BOOK = "PlayfairDisplay-Bold.ttf"
+BODY = "arial.ttf"
 
 
-def text(x, y, s, f, fill=INK, anchor="lt"):
-    d.text((x, y), s, font=f, fill=fill, anchor=anchor)
+class Sheet:
+    """A tiny drawing surface with clipping for the little illustrations."""
+
+    def __init__(self):
+        self.canvas = Image.new("RGB", (SIDE, SIDE), CREAM)
+        self.pen = ImageDraw.Draw(self.canvas)
+
+    def say(self, x, y, words, font, color=CHARCOAL, anchor="lt"):
+        self.pen.text((x, y), words, font=font, fill=color, anchor=anchor)
+
+    def fill(self, bounds, color, border=None, thickness=1):
+        self.pen.rectangle(bounds, fill=color, outline=border, width=thickness)
+
+    def rule(self, start, end, color, thickness=2):
+        self.pen.line([start, end], fill=color, width=thickness)
+
+    def shape(self, points, color):
+        self.pen.polygon(points, fill=color)
+
+    def disc(self, bounds, color, edge=None, width=1):
+        self.pen.ellipse(bounds, fill=color, outline=edge, width=width)
+
+    def fit(self, words, filename, pixels, room):
+        n = pixels
+        while n > 12:
+            font = face(filename, n)
+            if self.pen.textlength(words, font=font) <= room:
+                return font
+            n -= 2
+        return face(filename, 12)
+
+    def split(self, words, font, room):
+        rows, current = [], ""
+        for word in words.split():
+            trial = (current + " " + word).strip()
+            if self.pen.textlength(trial, font=font) <= room or not current:
+                current = trial
+            else:
+                rows.append(current)
+                current = word
+        if current:
+            rows.append(current)
+        return rows
+
+    def block(self, x, y, words, font, room, gap, color=CHARCOAL, cap=99):
+        rows = self.split(words, font, room)[:cap]
+        for k, row in enumerate(rows):
+            self.say(x, y + k * gap, row, font, color)
+        return y + len(rows) * gap
+
+    def panel(self, painter, bounds):
+        l, t, r, b = (int(v) for v in bounds)
+        tile = Image.new("RGB", (r - l, b - t), CREAM)
+        previous = self.pen
+        self.pen = ImageDraw.Draw(tile)
+        painter(0, 0, r - l, b - t)
+        self.pen = previous
+        self.canvas.paste(tile, (l, t))
+
+    # -------------------------------------------------- six original icons
+    def icon_climate(self, l, t, r, b):
+        self.fill((l, t, r, b), (214, 226, 220))
+        cx, cy = (l + r) / 2, (t + b) / 2 - 4
+        rad = min(r - l, b - t) / 2 - 10
+        self.disc((cx-rad, cy-rad, cx+rad, cy+rad), (63,104,96), (35,66,61), 2)
+        self.pen.arc((cx-rad, cy-rad*.35, cx+rad, cy+rad*.35), 0, 360,
+                     fill=(164,196,184), width=2)
+        self.rule((cx, cy-rad), (cx, cy+rad), (164,196,184), 2)
+        self.rule((cx-rad, cy), (cx+rad, cy), (164,196,184), 2)
+        self.fill((r-108, b-40, r-12, b-10), WHITE, CRIMSON, 2)
+        self.say(r-60, b-32, "NO DEAL", face(CAPS,16), CRIMSON, "mt")
+
+    def icon_ship(self, l, t, r, b):
+        self.fill((l, t, r, b), (29,48,67))
+        for k in range(3):
+            y = t + 24 + k*16
+            self.rule((l+12, y), (r-12, y), (92,134,156), 2)
+        cx = (l+r)/2
+        self.shape([(cx-90,b-20),(cx+92,b-20),(cx+62,b-4),(cx-62,b-4)], (190,200,208))
+        self.fill((cx-50,b-42,cx+38,b-20), (232,235,236))
+        self.fill((cx-30,b-60,cx+10,b-42), (232,235,236))
+        self.shape([(cx+40,b-20),(cx+47,b-48),(cx+55,b-24),
+                    (cx+63,b-56),(cx+70,b-20)], (225,96,40))
+        for k in range(3):
+            x, y = l+44+k*64, t+22+(k % 2)*15
+            self.rule((x-10,y-8),(x+10,y+8), (246,208,122), 3)
+            self.rule((x-10,y+8),(x+10,y-8), (246,208,122), 3)
+
+    def icon_tanker(self, l, t, r, b):
+        self.fill((l, t, r, b), (29,42,62))
+        self.rule((l+10,t+22),(r-10,t+22), (96,157,175), 3)
+        cx = (l+r)/2
+        self.shape([(cx-104,b-34),(cx+108,b-34),(cx+84,b-14),(cx-80,b-14)], (178,70,44))
+        self.fill((cx-84,b-62,cx+88,b-34), (198,92,62))
+        for k in range(4):
+            x = cx-70+k*44
+            self.fill((x,b-70,x+28,b-62), (232,210,180))
+        self.shape([(cx-44,b-70),(cx-28,b-92),(cx-8,b-70),
+                    (cx+10,b-100),(cx+30,b-70)], (240,158,54))
+        self.shape([(cx-18,b-70),(cx-2,b-84),(cx+16,b-70)], (249,218,130))
+        self.rule((l+10,b-6),(r-10,b-6), (96,157,175), 3)
+
+    def icon_market(self, l, t, r, b):
+        self.fill((l, t, r, b), (24,43,66))
+        for k in range(4):
+            y = t+18+k*18
+            self.rule((l+16,y),(r-16,y), (62,86,112), 1)
+        dots = [(l+24,t+24),(l+70,t+40),(l+116,t+30),
+                (l+162,t+60),(l+208,t+48),(l+258,t+82)]
+        self.pen.line(dots, fill=(242,118,96), width=5, joint="curve")
+        for px, py in dots:
+            self.disc((px-4,py-4,px+4,py+4), (250,198,118))
+        self.fill((r-74,t+12,r-14,t+48), (238,204,120))
+        self.say(r-44,t+30,"AI",face(CAPS,22),CHARCOAL,"mm")
+
+    def icon_factory(self, l, t, r, b):
+        self.fill((l, t, r, b), (36,44,56))
+        self.fill((l+34,b-56,r-34,b-8), (126,131,136))
+        for k in range(5):
+            x = l+46+k*((r-l-92)/5)
+            self.fill((x,b-78,x+20,b-56), (174,178,180))
+        for k, hgt in enumerate((34,52,40,62)):
+            x = l+64+k*52
+            self.shape([(x-16,b-78),(x,b-78-hgt),(x+16,b-78)], (238,140,52))
+            self.shape([(x-8,b-78),(x,b-78-hgt+12),(x+8,b-78)], (250,208,118))
+
+    def icon_clinic(self, l, t, r, b):
+        self.fill((l, t, r, b), (23,46,48))
+        self.fill((l+36,t+26,r-36,b-8), (226,231,226))
+        self.fill(((l+r)/2-8,t+44,(l+r)/2+8,b-8), (74,129,112))
+        self.fill((l+48,t+44,r-48,t+60), (74,129,112))
+        self.disc((r-92,t+14,r-48,t+58), (206,74,62))
+        self.fill((r-72,t+22,r-68,t+50), WHITE)
+        self.fill((r-84,t+34,r-56,t+38), WHITE)
+
+    def save(self, path):
+        self.canvas.save(path, format="PNG", optimize=True)
 
 
-def fitted(s, name, size, maxw, floor=12):
-    """Pick the largest face size at which the whole line fits maxw."""
-    while size > floor:
-        f = font(name, size)
-        if d.textlength(s, font=f) <= maxw:
-            return f
-        size -= 2
-    return font(name, floor)
+sheet = Sheet()
 
+# masthead and date -----------------------------------------------------------
+sheet.fill((0,0,SIDE,62), CHARCOAL)
+sheet.say(18,12,"THE WORLD IN ONE DAY", face(CAPS,29), WHITE)
+sheet.say(1004,16,"MONDAY EDITION", face(CAPS,20), (222,190,110), "rt")
+sheet.fill((0,62,SIDE,68), CRIMSON)
+headline_date = "23 NOVEMBER 2026"
+sheet.say(512,72,headline_date,
+          sheet.fit(headline_date,HEAVY,132,984), CHARCOAL, "mt")
+deck = "COP31 collapses  /  Ukraine strikes Libya  /  AI rout hits Asia"
+sheet.say(512,190,deck, sheet.fit(deck,CAPS,23,984), CRIMSON, "mt")
+sheet.rule((14,218),(1010,218), CHARCOAL, 3)
 
-def wrap(s, f, maxw):
-    lines, cur = [], ""
-    for word in s.split():
-        trial = (cur + " " + word).strip()
-        if d.textlength(trial, font=f) <= maxw or not cur:
-            cur = trial
-        else:
-            lines.append(cur)
-            cur = word
-    if cur:
-        lines.append(cur)
-    return lines
-
-
-def para(x, y, s, f, maxw, lh, fill=INK, maxlines=99):
-    rows = wrap(s, f, maxw)[:maxlines]
-    for i, line in enumerate(rows):
-        text(x, y + i * lh, line, f, fill)
-    return y + len(rows) * lh
-
-
-# ---------------------------------------------------------------- masthead
-d.rectangle([0, 0, W, 62], fill=INK)
-text(18, 12, "THE WORLD IN ONE DAY", font(COND, 29), WHITE)
-text(1004, 16, "MONDAY EDITION", font(COND, 20), (222, 190, 110), "rt")
-d.rectangle([0, 62, W, 68], fill=RED)
-
-# ---------------------------------------------------------------- the date
-date = "23 NOVEMBER 2026"
-text(512, 72, date, fitted(date, DISPLAY, 132, 984), INK, "mt")
-kicker = "COP31 collapses  /  Ukraine strikes Libya  /  AI rout hits Asia"
-text(512, 190, kicker, fitted(kicker, COND, 23, 984), RED, "mt")
-d.line([(14, 218), (1010, 218)], fill=INK, width=3)
-
-# ---------------------------------------------------------------- pictograms
-def globe_nodal(box):
-    x0, y0, x1, y1 = box
-    d.rectangle([x0, y0, x1, y1], fill=(214, 226, 220))
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2 - 4
-    r = min(x1 - x0, y1 - y0) / 2 - 10
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(63, 104, 96), outline=(35, 66, 61), width=2)
-    d.arc([cx - r, cy - r * 0.35, cx + r, cy + r * 0.35], 0, 360, fill=(164, 196, 184), width=2)
-    d.line([(cx, cy - r), (cx, cy + r)], fill=(164, 196, 184), width=2)
-    d.line([(cx - r, cy), (cx + r, cy)], fill=(164, 196, 184), width=2)
-    d.rectangle([x1 - 108, y1 - 40, x1 - 12, y1 - 10], fill=WHITE, outline=RED, width=2)
-    text(x1 - 60, y1 - 32, "NO DEAL", font(COND, 16), RED, "mt")
-
-
-def ship_drone(box):
-    x0, y0, x1, y1 = box
-    d.rectangle([x0, y0, x1, y1], fill=(29, 48, 67))
-    for i in range(3):
-        yy = y0 + 24 + i * 16
-        d.line([(x0 + 12, yy), (x1 - 12, yy)], fill=(92, 134, 156), width=2)
-    cx = (x0 + x1) / 2
-    d.polygon([(cx - 90, y1 - 20), (cx + 92, y1 - 20), (cx + 62, y1 - 4), (cx - 62, y1 - 4)],
-              fill=(190, 200, 208))
-    d.rectangle([cx - 50, y1 - 42, cx + 38, y1 - 20], fill=(232, 235, 236))
-    d.rectangle([cx - 30, y1 - 60, cx + 10, y1 - 42], fill=(232, 235, 236))
-    d.polygon([(cx + 40, y1 - 20), (cx + 47, y1 - 48), (cx + 55, y1 - 24),
-               (cx + 63, y1 - 56), (cx + 70, y1 - 20)], fill=(225, 96, 40))
-    for i in range(3):
-        x = x0 + 44 + i * 64
-        y = y0 + 22 + (i % 2) * 15
-        d.line([(x - 10, y - 8), (x + 10, y + 8)], fill=(246, 208, 122), width=3)
-        d.line([(x - 10, y + 8), (x + 10, y - 8)], fill=(246, 208, 122), width=3)
-
-
-def burning_tanker(box):
-    x0, y0, x1, y1 = box
-    d.rectangle([x0, y0, x1, y1], fill=(29, 42, 62))
-    cx = (x0 + x1) / 2
-    d.line([(x0 + 10, y0 + 22), (x1 - 10, y0 + 22)], fill=(96, 157, 175), width=3)
-    d.polygon([(cx - 104, y1 - 34), (cx + 108, y1 - 34), (cx + 84, y1 - 14),
-               (cx - 80, y1 - 14)], fill=(178, 70, 44))
-    d.rectangle([cx - 84, y1 - 62, cx + 88, y1 - 34], fill=(198, 92, 62))
-    for i in range(4):
-        xx = cx - 70 + i * 44
-        d.rectangle([xx, y1 - 70, xx + 28, y1 - 62], fill=(232, 210, 180))
-    d.polygon([(cx - 44, y1 - 70), (cx - 28, y1 - 92), (cx - 8, y1 - 70),
-               (cx + 10, y1 - 100), (cx + 30, y1 - 70)], fill=(240, 158, 54))
-    d.polygon([(cx - 18, y1 - 70), (cx - 2, y1 - 84), (cx + 16, y1 - 70)], fill=(249, 218, 130))
-    d.line([(x0 + 10, y1 - 6), (x1 - 10, y1 - 6)], fill=(96, 157, 175), width=3)
-
-
-def falling_chart(box):
-    x0, y0, x1, y1 = box
-    d.rectangle([x0, y0, x1, y1], fill=(24, 43, 66))
-    for i in range(4):
-        yy = y0 + 18 + i * 18
-        d.line([(x0 + 16, yy), (x1 - 16, yy)], fill=(62, 86, 112), width=1)
-    pts = [(x0 + 24, y0 + 24), (x0 + 70, y0 + 40), (x0 + 116, y0 + 30),
-           (x0 + 162, y0 + 60), (x0 + 208, y0 + 48), (x0 + 258, y0 + 82)]
-    d.line(pts, fill=(242, 118, 96), width=5, joint="curve")
-    for px, py in pts:
-        d.ellipse([px - 4, py - 4, px + 4, py + 4], fill=(250, 198, 118))
-    d.rectangle([x1 - 74, y0 + 12, x1 - 14, y0 + 48], fill=(238, 204, 120))
-    text(x1 - 44, y0 + 30, "AI", font(COND, 22), INK, "mm")
-
-
-def factory_fire(box):
-    x0, y0, x1, y1 = box
-    d.rectangle([x0, y0, x1, y1], fill=(36, 44, 56))
-    d.rectangle([x0 + 34, y1 - 56, x1 - 34, y1 - 8], fill=(126, 131, 136))
-    for i in range(5):
-        xx = x0 + 46 + i * ((x1 - x0 - 92) / 5)
-        d.rectangle([xx, y1 - 78, xx + 20, y1 - 56], fill=(174, 178, 180))
-    for i, h in enumerate((34, 52, 40, 62)):
-        xx = x0 + 64 + i * 52
-        d.polygon([(xx - 16, y1 - 78), (xx, y1 - 78 - h), (xx + 16, y1 - 78)],
-                  fill=(238, 140, 52))
-        d.polygon([(xx - 8, y1 - 78), (xx, y1 - 78 - h + 12), (xx + 8, y1 - 78)],
-                  fill=(250, 208, 118))
-
-
-def clinic(box):
-    x0, y0, x1, y1 = box
-    d.rectangle([x0, y0, x1, y1], fill=(23, 46, 48))
-    d.rectangle([x0 + 36, y0 + 26, x1 - 36, y1 - 8], fill=(226, 231, 226))
-    d.rectangle([(x0 + x1) / 2 - 8, y0 + 44, (x0 + x1) / 2 + 8, y1 - 8], fill=(74, 129, 112))
-    d.rectangle([x0 + 48, y0 + 44, x1 - 48, y0 + 60], fill=(74, 129, 112))
-    d.ellipse([x1 - 92, y0 + 14, x1 - 48, y0 + 58], fill=(206, 74, 62))
-    d.rectangle([x1 - 72, y0 + 22, x1 - 68, y0 + 50], fill=WHITE)
-    d.rectangle([x1 - 84, y0 + 34, x1 - 56, y0 + 38], fill=WHITE)
-
-
-ICONS = {"cop": globe_nodal, "ship": ship_drone, "gulf": burning_tanker,
-         "chart": falling_chart, "fire": factory_fire, "clinic": clinic}
-
-
-def icon(kind, box):
-    """Draw on a clipped layer so no stroke escapes the picture box."""
-    global d
-    x0, y0, x1, y1 = (int(v) for v in box)
-    layer = Image.new("RGB", (x1 - x0, y1 - y0), PAPER)
-    saved = d
-    d = ImageDraw.Draw(layer)
-    ICONS[kind]((0, 0, x1 - x0, y1 - y0))
-    d = saved
-    img.paste(layer, (x0, y0))
-
-
-# ---------------------------------------------------------------- six stories
+# the six main stories --------------------------------------------------------
 stories = [
-    ("WORLD  /  CLIMATE", RED, "cop", "COP31 ends with no deal",
-     "Longest UN climate talks collapse; the draft omits fossil fuels.", "Reuters / AP"),
-    ("UKRAINE  /  LIBYA", INK, "ship", "Ukraine sinks Russian ship",
-     "Zelensky claims naval-drone strikes on two vessels off Benghazi.", "Reuters / AFP"),
-    ("GULF  /  HORMUZ", RED, "gulf", "Tankers ablaze in Hormuz",
-     "Iran vows to break the US blockade as shipping comes under attack.", "Al Jazeera"),
-    ("MARKETS  /  ASIA", BLUE, "chart", "AI sell-off hits Asia",
-     "Seoul shares slide as bubble fears spread after the Nasdaq rout.", "Reuters / BBC"),
-    ("INDONESIA  /  DISASTER", TEAL, "fire", "24 dead in factory fire",
-     "Candy-plant blaze at Cikande; rescuers search for the missing.", "AFP / Guardian"),
-    ("DR CONGO  /  HEALTH", GREEN, "clinic", "Fighting imperils Ebola care",
-     "WHO urges peace as battles disrupt treatment in the east.", "WHO / Reuters"),
+    dict(tag="WORLD  /  CLIMATE", tint=CRIMSON, art=Sheet.icon_climate,
+         title="COP31 ends with no deal",
+         note="Longest UN climate talks collapse; the draft omits fossil fuels.",
+         credit="Reuters / AP"),
+    dict(tag="UKRAINE  /  LIBYA", tint=CHARCOAL, art=Sheet.icon_ship,
+         title="Ukraine sinks Russian ship",
+         note="Zelensky claims naval-drone strikes on two vessels off Benghazi.",
+         credit="Reuters / AFP"),
+    dict(tag="GULF  /  HORMUZ", tint=CRIMSON, art=Sheet.icon_tanker,
+         title="Tankers ablaze in Hormuz",
+         note="Iran vows to break the US blockade as shipping comes under attack.",
+         credit="Al Jazeera"),
+    dict(tag="MARKETS  /  ASIA", tint=OCEAN, art=Sheet.icon_market,
+         title="AI sell-off hits Asia",
+         note="Seoul shares slide as bubble fears spread after the Nasdaq rout.",
+         credit="Reuters / BBC"),
+    dict(tag="INDONESIA  /  DISASTER", tint=LAGOON, art=Sheet.icon_factory,
+         title="24 dead in factory fire",
+         note="Candy-plant blaze at Cikande; rescuers search for the missing.",
+         credit="AFP / Guardian"),
+    dict(tag="DR CONGO  /  HEALTH", tint=FOREST, art=Sheet.icon_clinic,
+         title="Fighting imperils Ebola care",
+         note="WHO urges peace as battles disrupt treatment in the east.",
+         credit="WHO / Reuters"),
 ]
 
-cw = (982 - 2 * 14) / 3
-for i, (label, col, art, headline, caption, source) in enumerate(stories):
-    row, colno = divmod(i, 3)
-    x = 14 + colno * (cw + 14)
-    y = 226 + row * 274
-    d.rectangle([x, y, x + cw, y + 262], fill=CARD, outline=LINE, width=1)
-    d.rectangle([x + 1, y + 1, x + cw - 1, y + 31], fill=col)
-    text(x + 10, y + 8, label, font(COND, 15), WHITE)
-    text(x + cw - 12, y + 8, "23 NOV", font(COND, 13), WHITE, "rt")
-    icon(art, (x + 1, y + 32, x + cw - 1, y + 124))
-    yy = para(x + 12, y + 130, headline,
-              fitted(headline, SERIF, 30, cw - 24), cw - 24, 35, INK, 2)
-    para(x + 12, yy + 4, caption, font(SANS, 17), cw - 24, 21, (64, 71, 76), 3)
-    text(x + 12, y + 246, source, font(COND, 11), GRAY)
+width = (982 - 28) / 3
+for index, story in enumerate(stories):
+    row, col = divmod(index, 3)
+    left = 14 + col * (width + 14)
+    top = 226 + row * 274
+    sheet.fill((left,top,left+width,top+262), PANEL, RULE, 1)
+    sheet.fill((left+1,top+1,left+width-1,top+31), story["tint"])
+    sheet.say(left+10,top+8,story["tag"], face(CAPS,15), WHITE)
+    sheet.say(left+width-12,top+8,"23 NOV", face(CAPS,13), WHITE, "rt")
+    sheet.panel(story["art"], (left+1,top+32,left+width-1,top+124))
+    below = sheet.block(left+12, top+130, story["title"],
+                        sheet.fit(story["title"],BOOK,30,width-24),
+                        width-24, 35, CHARCOAL, 2)
+    sheet.block(left+12, below+4, story["note"], face(BODY,17),
+                width-24, 21, (64,71,76), 3)
+    sheet.say(left+12,top+246,story["credit"], face(CAPS,11), ASH)
 
-# ---------------------------------------------------------------- also today
-d.rectangle([14, 778, 1010, 936], fill=(232, 228, 216))
-d.rectangle([14, 778, 1010, 806], fill=INK)
-text(24, 782, "ALSO ON MONDAY 23 NOVEMBER", font(COND, 18), WHITE)
-also = [
+# smaller stories -------------------------------------------------------------
+sheet.fill((14,778,1010,936), (232,228,216))
+sheet.fill((14,778,1010,806), CHARCOAL)
+sheet.say(24,782,"ALSO ON MONDAY 23 NOVEMBER", face(CAPS,18), WHITE)
+extras = [
     ("AMERICAS", "US admits it deported one of its own citizens to Mexico"),
     ("EUROPE", "Belgium airports shut in strikes against austerity"),
     ("MIDDLE EAST", "Oxfam: Gaza has become a toxic wasteland"),
 ]
-aw = (982 - 2 * 12) / 3
-for i, (where, item) in enumerate(also):
-    x = 20 + i * (aw + 12)
-    text(x, 814, where, font(COND, 15), RED)
-    para(x, 838, item, font(SANS, 16), aw - 8, 21, INK, 3)
+column = (982 - 24) / 3
+for i, (place, item) in enumerate(extras):
+    x = 20 + i*(column+12)
+    sheet.say(x,814,place, face(CAPS,15), CRIMSON)
+    sheet.block(x,838,item, face(BODY,16), column-8, 21, CHARCOAL, 3)
 
-# ---------------------------------------------------------------- footer
-d.rectangle([0, 944, W, H], fill=INK)
-text(16, 958, "SOURCES: REUTERS  /  AP  /  AFP  /  BBC  /  AL JAZEERA  /  GUARDIAN  /  WHO",
-     font(SANS, 13), (220, 228, 232))
-text(16, 984, "ONE DAY  -  ONE IMAGE  -  ALL STORIES REPORTED 23 NOVEMBER 2026",
-     font(COND, 14), (196, 207, 213))
-text(1008, 960, "23 XI 26", font(SERIF, 30), (222, 229, 232), "rt")
+# footer ----------------------------------------------------------------------
+sheet.fill((0,944,SIDE,SIDE), CHARCOAL)
+sheet.say(16,958,"SOURCES: REUTERS  /  AP  /  AFP  /  BBC  /  AL JAZEERA  /  GUARDIAN  /  WHO",
+          face(BODY,13), (220,228,232))
+sheet.say(16,984,"ONE DAY  -  ONE IMAGE  -  ALL STORIES REPORTED 23 NOVEMBER 2026",
+          face(CAPS,14), (196,207,213))
+sheet.say(1008,960,"23 XI 26", face(BOOK,30), (222,229,232), "rt")
 
-img.save("entry.png", format="PNG", optimize=True)
-print("wrote entry.png", img.size)
+sheet.save("entry.png")
+print("drew entry.png", sheet.canvas.size)
